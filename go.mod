@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/comfforts/comff-constants v0.0.11
-	github.com/comfforts/comff-delivery v0.0.12
+	github.com/comfforts/comff-delivery v0.0.13
 	github.com/comfforts/errors v0.1.1
 	github.com/comfforts/logger v0.1.13
 	github.com/stretchr/testify v1.8.1
