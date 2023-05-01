@@ -3,20 +3,21 @@ package client
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/comfforts/comff-delivery-client/internal/config"
+	config "github.com/comfforts/comff-config"
 	"github.com/comfforts/logger"
 
 	api "github.com/comfforts/comff-delivery/api/v1"
 )
 
-const SERVICE_PORT = 56051
-const SERVICE_DOMAIN = "127.0.0.1"
+const DEFAULT_SERVICE_PORT = "56051"
+const DEFAULT_SERVICE_HOST = "127.0.0.1"
 
 type ContextKey string
 
@@ -75,11 +76,8 @@ func NewClient(
 	logger logger.AppLogger,
 	clientOpts *ClientOption,
 ) (*deliveriesClient, error) {
-	tlsConfig, err := config.SetupTLSConfig(config.TLSConfig{
-		CertFile: config.CertFile(config.DeliveryClientCertFile),
-		KeyFile:  config.CertFile(config.DeliveryClientKeyFile),
-		CAFile:   config.CertFile(config.CAFile),
-		Server:   false,
+	tlsConfig, err := config.SetupTLSConfig(&config.ConfigOpts{
+		Target: config.DELIVERY_CLIENT,
 	})
 	if err != nil {
 		logger.Error("error setting delivery service client TLS", zap.Error(err))
@@ -90,7 +88,15 @@ func NewClient(
 		grpc.WithTransportCredentials(tlsCreds),
 	}
 
-	serviceAddr := fmt.Sprintf("%s:%d", SERVICE_DOMAIN, SERVICE_PORT)
+	servicePort := os.Getenv("DELIVERY_SERVICE_PORT")
+	if servicePort == "" {
+		servicePort = DEFAULT_SERVICE_PORT
+	}
+	serviceHost := os.Getenv("DELIVERY_SERVICE_HOST")
+	if serviceHost == "" {
+		serviceHost = DEFAULT_SERVICE_HOST
+	}
+	serviceAddr := fmt.Sprintf("%s:%s", serviceHost, servicePort)
 	// with load balancer
 	// serviceAddr = fmt.Sprintf("%s:///%s", loadbalance.ShopResolverName, serviceAddr)
 	// serviceAddr = fmt.Sprintf("%s:///%s", "shops", serviceAddr)
