@@ -46,6 +46,7 @@ type Client interface {
 	CreateOrder(ctx context.Context, req *api.CreateOrderRequest, opts ...grpc.CallOption) (*api.OrderResponse, error)
 	UpdateOrder(ctx context.Context, req *api.UpdateOrderRequest, opts ...grpc.CallOption) (*api.OrderResponse, error)
 	GetOrder(ctx context.Context, req *api.GetOrderRequest, opts ...grpc.CallOption) (*api.OrderResponse, error)
+	GetOrders(ctx context.Context, req *api.GetOrdersRequest, opts ...grpc.CallOption) (*api.OrdersResponse, error)
 	DeleteOrder(ctx context.Context, req *api.DeleteOrderRequest, opts ...grpc.CallOption) (*api.DeleteResponse, error)
 	CreateDelivery(ctx context.Context, req *api.CreateDeliveryRequest, opts ...grpc.CallOption) (*api.DeliveryResponse, error)
 	UpdateDelivery(ctx context.Context, req *api.UpdateDeliveryRequest, opts ...grpc.CallOption) (*api.DeliveryResponse, error)
@@ -180,6 +181,17 @@ func (dc *deliveriesClient) GetOrder(
 	defer cancel()
 
 	return dc.client.GetOrder(ctx, req)
+}
+
+func (dc *deliveriesClient) GetOrders(
+	ctx context.Context,
+	req *api.GetOrdersRequest,
+	opts ...grpc.CallOption,
+) (*api.OrdersResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return dc.client.GetOrders(ctx, req)
 }
 
 func (dc *deliveriesClient) DeleteOrder(
