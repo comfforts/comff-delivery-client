@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 
 	config "github.com/comfforts/comff-config"
 	"github.com/comfforts/logger"
@@ -37,6 +38,7 @@ type ClientOption struct {
 	DialTimeout      time.Duration
 	KeepAlive        time.Duration
 	KeepAliveTimeout time.Duration
+	Caller           string
 }
 
 type Client interface {
@@ -71,6 +73,7 @@ type deliveriesClient struct {
 	logger logger.AppLogger
 	client api.DeliveriesClient
 	conn   *grpc.ClientConn
+	opts   *ClientOption
 }
 
 func NewClient(
@@ -114,6 +117,7 @@ func NewClient(
 		client: client,
 		logger: logger,
 		conn:   conn,
+		opts:   clientOpts,
 	}, nil
 }
 
@@ -122,7 +126,7 @@ func (dc *deliveriesClient) GetOrderStatuses(
 	req *api.OrderStatusesRequest,
 	opts ...grpc.CallOption,
 ) (*api.OrderStatusesResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetOrderStatuses(ctx, req)
@@ -133,7 +137,7 @@ func (dc *deliveriesClient) GetDeliveryStatuses(
 	req *api.DeliveryStatusesRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeliveryStatusesResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetDeliveryStatuses(ctx, req)
@@ -144,7 +148,7 @@ func (dc *deliveriesClient) GetScheduleStatuses(
 	req *api.ScheduleStatusesRequest,
 	opts ...grpc.CallOption,
 ) (*api.ScheduleStatusesResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetScheduleStatuses(ctx, req)
@@ -155,7 +159,7 @@ func (dc *deliveriesClient) CreateOrder(
 	req *api.CreateOrderRequest,
 	opts ...grpc.CallOption,
 ) (*api.OrderResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.CreateOrder(ctx, req)
@@ -166,7 +170,7 @@ func (dc *deliveriesClient) UpdateOrder(
 	req *api.UpdateOrderRequest,
 	opts ...grpc.CallOption,
 ) (*api.OrderResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.UpdateOrder(ctx, req)
@@ -177,7 +181,7 @@ func (dc *deliveriesClient) GetOrder(
 	req *api.GetOrderRequest,
 	opts ...grpc.CallOption,
 ) (*api.OrderResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetOrder(ctx, req)
@@ -188,7 +192,7 @@ func (dc *deliveriesClient) GetOrders(
 	req *api.GetOrdersRequest,
 	opts ...grpc.CallOption,
 ) (*api.OrdersResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetOrders(ctx, req)
@@ -199,7 +203,7 @@ func (dc *deliveriesClient) DeleteOrder(
 	req *api.DeleteOrderRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeleteResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.DeleteOrder(ctx, req)
@@ -210,7 +214,7 @@ func (dc *deliveriesClient) CreateDelivery(
 	req *api.CreateDeliveryRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeliveryResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.CreateDelivery(ctx, req)
@@ -221,7 +225,7 @@ func (dc *deliveriesClient) UpdateDelivery(
 	req *api.UpdateDeliveryRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeliveryResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.UpdateDelivery(ctx, req)
@@ -232,7 +236,7 @@ func (dc *deliveriesClient) GetDelivery(
 	req *api.GetDeliveryRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeliveryResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.GetDelivery(ctx, req)
@@ -254,7 +258,7 @@ func (dc *deliveriesClient) DeleteDelivery(
 	req *api.DeleteDeliveryRequest,
 	opts ...grpc.CallOption,
 ) (*api.DeleteResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
 	defer cancel()
 
 	return dc.client.DeleteDelivery(ctx, req)
@@ -266,4 +270,14 @@ func (dc *deliveriesClient) Close() error {
 		return err
 	}
 	return nil
+}
+
+func (dc *deliveriesClient) contextWithOptions(ctx context.Context, opts *ClientOption) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(ctx, dc.opts.DialTimeout)
+	if dc.opts.Caller != "" {
+		md := metadata.New(map[string]string{"service-client": dc.opts.Caller})
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
+
+	return ctx, cancel
 }

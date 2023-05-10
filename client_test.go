@@ -41,7 +41,10 @@ func setup(t *testing.T, logger logger.AppLogger) (
 ) {
 	t.Helper()
 
-	dc, err := NewClient(logger, NewDefaultClientOption())
+	clientOpts := NewDefaultClientOption()
+	clientOpts.Caller = "delivery-client-test"
+
+	dc, err := NewClient(logger, clientOpts)
 	require.NoError(t, err)
 
 	return dc, func() {
