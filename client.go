@@ -33,6 +33,7 @@ var (
 )
 
 const DeliveryClientContextKey = ContextKey("delivery-client")
+const DefaultClientName = "comfforts-delivery-client"
 
 type ClientOption struct {
 	DialTimeout      time.Duration
@@ -80,6 +81,10 @@ func NewClient(
 	logger logger.AppLogger,
 	clientOpts *ClientOption,
 ) (*deliveriesClient, error) {
+	if clientOpts.Caller == "" {
+		clientOpts.Caller = DefaultClientName
+	}
+
 	tlsConfig, err := config.SetupTLSConfig(&config.ConfigOpts{
 		Target: config.DELIVERY_CLIENT,
 	})
