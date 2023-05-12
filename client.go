@@ -107,12 +107,12 @@ func NewClient(
 
 	conn, err := grpc.Dial(serviceAddr, opts...)
 	if err != nil {
-		logger.Error("client failed to connect", zap.Error(err))
+		logger.Error("delivery client failed to connect", zap.Error(err))
 		return nil, err
 	}
 
 	client := api.NewDeliveriesClient(conn)
-
+	logger.Info("delivery client connected", zap.String("host", serviceHost), zap.String("port", servicePort))
 	return &deliveriesClient{
 		client: client,
 		logger: logger,

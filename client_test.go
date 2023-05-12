@@ -1,4 +1,4 @@
-package client
+package client_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	comffC "github.com/comfforts/comff-constants"
+	delclient "github.com/comfforts/comff-delivery-client"
 	api "github.com/comfforts/comff-delivery/api/v1"
 	"github.com/comfforts/logger"
 )
@@ -20,7 +21,7 @@ func TestDeliveriesClient(t *testing.T) {
 
 	for scenario, fn := range map[string]func(
 		t *testing.T,
-		dc Client,
+		dc delclient.Client,
 	){
 		"test database setup check, succeeds": testDatabaseSetup,
 		"test order CRUD, succeeds":           testOrderCRUD,
@@ -36,15 +37,15 @@ func TestDeliveriesClient(t *testing.T) {
 }
 
 func setup(t *testing.T, logger logger.AppLogger) (
-	dc Client,
+	dc delclient.Client,
 	teardown func(),
 ) {
 	t.Helper()
 
-	clientOpts := NewDefaultClientOption()
+	clientOpts := delclient.NewDefaultClientOption()
 	clientOpts.Caller = "delivery-client-test"
 
-	dc, err := NewClient(logger, clientOpts)
+	dc, err := delclient.NewClient(logger, clientOpts)
 	require.NoError(t, err)
 
 	return dc, func() {
@@ -54,9 +55,7 @@ func setup(t *testing.T, logger logger.AppLogger) (
 	}
 }
 
-func testDatabaseSetup(t *testing.T, dc Client) {
-	t.Helper()
-
+func testDatabaseSetup(t *testing.T, dc delclient.Client) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -75,7 +74,7 @@ func testDatabaseSetup(t *testing.T, dc Client) {
 	require.Equal(t, len(ssResp.Statuses), 4)
 }
 
-func testOrderCRUD(t *testing.T, dc Client) {
+func testOrderCRUD(t *testing.T, dc delclient.Client) {
 	t.Helper()
 
 	now := time.Now()
@@ -120,7 +119,7 @@ func testOrderCRUD(t *testing.T, dc Client) {
 	})
 }
 
-func testDeliveryCRUD(t *testing.T, dc Client) {
+func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 	t.Helper()
 
 	now := time.Now()
@@ -197,7 +196,7 @@ func testDeliveryCRUD(t *testing.T, dc Client) {
 	})
 }
 
-func createOrderTester(t *testing.T, client Client, cor *api.CreateOrderRequest) *api.OrderResponse {
+func createOrderTester(t *testing.T, client delclient.Client, cor *api.CreateOrderRequest) *api.OrderResponse {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -223,7 +222,7 @@ func createOrderTester(t *testing.T, client Client, cor *api.CreateOrderRequest)
 	return resp
 }
 
-func getOrderTester(t *testing.T, client Client, gor *api.GetOrderRequest) *api.OrderResponse {
+func getOrderTester(t *testing.T, client delclient.Client, gor *api.GetOrderRequest) *api.OrderResponse {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -233,7 +232,7 @@ func getOrderTester(t *testing.T, client Client, gor *api.GetOrderRequest) *api.
 	return resp
 }
 
-func deleteOrderTester(t *testing.T, client Client, dor *api.DeleteOrderRequest) {
+func deleteOrderTester(t *testing.T, client delclient.Client, dor *api.DeleteOrderRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -242,7 +241,7 @@ func deleteOrderTester(t *testing.T, client Client, dor *api.DeleteOrderRequest)
 	require.Equal(t, true, resp.Ok)
 }
 
-func createDeliveryTester(t *testing.T, client Client, cdr *api.CreateDeliveryRequest) *api.DeliveryResponse {
+func createDeliveryTester(t *testing.T, client delclient.Client, cdr *api.CreateDeliveryRequest) *api.DeliveryResponse {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -269,7 +268,7 @@ func createDeliveryTester(t *testing.T, client Client, cdr *api.CreateDeliveryRe
 	return resp
 }
 
-func getDeliveryTester(t *testing.T, client Client, gd *api.GetDeliveryRequest) *api.DeliveryResponse {
+func getDeliveryTester(t *testing.T, client delclient.Client, gd *api.GetDeliveryRequest) *api.DeliveryResponse {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -279,7 +278,7 @@ func getDeliveryTester(t *testing.T, client Client, gd *api.GetDeliveryRequest) 
 	return resp
 }
 
-func deleteDeliveryTester(t *testing.T, client Client, dd *api.DeleteDeliveryRequest) {
+func deleteDeliveryTester(t *testing.T, client delclient.Client, dd *api.DeleteDeliveryRequest) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
