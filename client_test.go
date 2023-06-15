@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	comffC "github.com/comfforts/comff-constants"
 	delclient "github.com/comfforts/comff-delivery-client"
@@ -23,9 +25,11 @@ func TestDeliveriesClient(t *testing.T) {
 		t *testing.T,
 		dc delclient.Client,
 	){
-		"test database setup check, succeeds": testDatabaseSetup,
-		"test order CRUD, succeeds":           testOrderCRUD,
-		"test delivery CRUD, succeeds":        testDeliveryCRUD,
+		"test database setup check, succeeds":       testDatabaseSetup,
+		"test order CRUD, succeeds":                 testOrderCRUD,
+		"test delivery CRUD, succeeds":              testDeliveryCRUD,
+		"invalid delivery create check, succeeds":   testInvalidDeliveryCreate,
+		"duplicate delivery create check, succeeds": testDuplicateDeliveryCreate,
 	} {
 		t.Run(scenario, func(t *testing.T) {
 			dc, teardown := setup(t, logger)
@@ -33,7 +37,6 @@ func TestDeliveriesClient(t *testing.T) {
 			fn(t, dc)
 		})
 	}
-
 }
 
 func setup(t *testing.T, logger logger.AppLogger) (
@@ -193,6 +196,125 @@ func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 
 	deleteDeliveryTester(t, dc, &api.DeleteDeliveryRequest{
 		Id: delResp.Delivery.Id,
+	})
+}
+
+func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client) {
+	t.Helper()
+
+	now := time.Now()
+	start := now.Add(48 * time.Hour).Unix()
+	end := now.Add(53 * time.Hour).Unix()
+
+	reqtr, shopId, txnId := "test-client-create-delivery@gmail.com", "test-client-delivery-create", "Cr341D3lv2y"
+	or := createOrderTester(t, dc, &api.CreateOrderRequest{
+		ShopId:        shopId,
+		RequestedBy:   reqtr,
+		TransactionId: txnId,
+		OfferMin:      comffC.F12,
+		OfferMax:      comffC.F15,
+		StartId:       "s742t",
+		DestinationId: "63s1",
+		PkgHeight:     comffC.F10,
+		PkgWidth:      comffC.F20,
+		PkgDepth:      comffC.F12,
+		StartTime:     start,
+		EndTime:       end,
+	})
+	or = getOrderTester(t, dc, &api.GetOrderRequest{
+		Id: or.Order.Id,
+	})
+
+	cdr := &api.CreateDeliveryRequest{
+		OrderId:       or.Order.Id,
+		RequestedBy:   reqtr,
+		SourceId:      shopId,
+		OfferMin:      comffC.F12,
+		OfferMax:      comffC.F15,
+		StartId:       "s742t",
+		DestinationId: "63s1",
+		PkgHeight:     comffC.F10,
+		PkgWidth:      comffC.F20,
+		PkgDepth:      comffC.F12,
+		StartTime:     start,
+		EndTime:       end,
+	}
+
+	delResp := createDeliveryTester(t, dc, cdr)
+	delResp = getDeliveryTester(t, dc, &api.GetDeliveryRequest{
+		Id: delResp.Delivery.Id,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := dc.CreateDelivery(ctx, cdr)
+	require.Error(t, err)
+	e, ok := status.FromError(err)
+	require.Equal(t, ok, true)
+	require.Equal(t, e.Code(), codes.AlreadyExists)
+
+	deleteOrderTester(t, dc, &api.DeleteOrderRequest{
+		Id: or.Order.Id,
+	})
+
+	deleteDeliveryTester(t, dc, &api.DeleteDeliveryRequest{
+		Id: delResp.Delivery.Id,
+	})
+}
+
+func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client) {
+	t.Helper()
+
+	now := time.Now()
+	start := now.Add(48 * time.Hour).Unix()
+	end := now.Add(53 * time.Hour).Unix()
+
+	reqtr, shopId, txnId := "test-client-create-delivery@gmail.com", "test-client-delivery-create", "Cr341D3lv2y"
+	or := createOrderTester(t, dc, &api.CreateOrderRequest{
+		ShopId:        shopId,
+		RequestedBy:   reqtr,
+		TransactionId: txnId,
+		OfferMin:      comffC.F12,
+		OfferMax:      comffC.F15,
+		StartId:       "s742t",
+		DestinationId: "63s1",
+		PkgHeight:     comffC.F10,
+		PkgWidth:      comffC.F20,
+		PkgDepth:      comffC.F12,
+		StartTime:     start,
+		EndTime:       end,
+	})
+	or = getOrderTester(t, dc, &api.GetOrderRequest{
+		Id: or.Order.Id,
+	})
+
+	cdr := &api.CreateDeliveryRequest{
+		OrderId:       or.Order.Id,
+		RequestedBy:   "",
+		SourceId:      shopId,
+		OfferMin:      comffC.F12,
+		OfferMax:      comffC.F15,
+		StartId:       "s742t",
+		DestinationId: "63s1",
+		PkgHeight:     comffC.F10,
+		PkgWidth:      comffC.F20,
+		PkgDepth:      comffC.F12,
+		StartTime:     start,
+		EndTime:       end,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := dc.CreateDelivery(ctx, cdr)
+	require.Error(t, err)
+	e, ok := status.FromError(err)
+	require.Equal(t, ok, true)
+	require.Equal(t, e.Code(), codes.InvalidArgument)
+
+	deleteOrderTester(t, dc, &api.DeleteOrderRequest{
+		Id: or.Order.Id,
 	})
 }
 
