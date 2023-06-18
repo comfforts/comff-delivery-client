@@ -56,10 +56,67 @@ type Client interface {
 	GetDelivery(ctx context.Context, req *api.GetDeliveryRequest, opts ...grpc.CallOption) (*api.DeliveryResponse, error)
 	GetDeliveries(ctx context.Context, req *api.GetDeliveriesRequest, opts ...grpc.CallOption) (*api.DeliveriesResponse, error)
 	DeleteDelivery(ctx context.Context, req *api.DeleteDeliveryRequest, opts ...grpc.CallOption) (*api.DeleteResponse, error)
-	// ScheduleDelivery(ctx context.Context, req *api.ScheduleDeliveryRequest, opts ...grpc.CallOption) (*api.DeliveryScheduleResponse, error)
-	// UpdateDeliverySchedule(ctx context.Context, req *api.UpdateDeliveryScheduleRequest, opts ...grpc.CallOption) (*api.DeliveryScheduleResponse, error)
-	// GetDeliverySchedule(ctx context.Context, req *api.GetDeliveryScheduleRequest, opts ...grpc.CallOption) (*api.DeliveryScheduleResponse, error)
+	CreateSchedule(ctx context.Context, req *api.CreateScheduleRequest, opts ...grpc.CallOption) (*api.ScheduleResponse, error)
+	UpdateSchedule(ctx context.Context, req *api.UpdateScheduleRequest, opts ...grpc.CallOption) (*api.ScheduleResponse, error)
+	GetSchedule(ctx context.Context, req *api.GetScheduleRequest, opts ...grpc.CallOption) (*api.ScheduleResponse, error)
+	SearchSchedules(ctx context.Context, req *api.GetSchedulesRequest, opts ...grpc.CallOption) (*api.SchedulesResponse, error)
+	DeleteSchedule(ctx context.Context, req *api.DeleteScheduleRequest, opts ...grpc.CallOption) (*api.DeleteResponse, error)
 	Close() error
+}
+
+func (dc *deliveriesClient) CreateSchedule(
+	ctx context.Context,
+	req *api.CreateScheduleRequest,
+	opts ...grpc.CallOption,
+) (*api.ScheduleResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.CreateSchedule(ctx, req)
+}
+
+func (dc *deliveriesClient) UpdateSchedule(
+	ctx context.Context,
+	req *api.UpdateScheduleRequest,
+	opts ...grpc.CallOption,
+) (*api.ScheduleResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.UpdateSchedule(ctx, req)
+}
+
+func (dc *deliveriesClient) GetSchedule(
+	ctx context.Context,
+	req *api.GetScheduleRequest,
+	opts ...grpc.CallOption,
+) (*api.ScheduleResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.GetSchedule(ctx, req)
+}
+
+func (dc *deliveriesClient) SearchSchedules(
+	ctx context.Context,
+	req *api.GetSchedulesRequest,
+	opts ...grpc.CallOption,
+) (*api.SchedulesResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.SearchSchedules(ctx, req)
+}
+
+func (dc *deliveriesClient) DeleteSchedule(
+	ctx context.Context,
+	req *api.DeleteScheduleRequest,
+	opts ...grpc.CallOption,
+) (*api.DeleteResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.DeleteSchedule(ctx, req)
 }
 
 func NewDefaultClientOption() *ClientOption {

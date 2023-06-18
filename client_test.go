@@ -2,6 +2,7 @@ package client_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,44 +12,49 @@ import (
 	"google.golang.org/grpc/status"
 
 	comffC "github.com/comfforts/comff-constants"
+	geoclient "github.com/comfforts/comff-geo-client"
+	geoapi "github.com/comfforts/comff-geo/api/v1"
+	"github.com/comfforts/logger"
+
 	delclient "github.com/comfforts/comff-delivery-client"
 	api "github.com/comfforts/comff-delivery/api/v1"
-	"github.com/comfforts/logger"
 )
 
 const TEST_DIR = "data"
 
 func TestDeliveriesClient(t *testing.T) {
-	logger := logger.NewTestAppLogger(TEST_DIR)
+	testLogger := logger.NewTestAppLogger(TEST_DIR)
 
 	for scenario, fn := range map[string]func(
 		t *testing.T,
 		dc delclient.Client,
+		testLogger logger.AppLogger,
 	){
 		"test database setup check, succeeds":       testDatabaseSetup,
 		"test order CRUD, succeeds":                 testOrderCRUD,
 		"test delivery CRUD, succeeds":              testDeliveryCRUD,
 		"invalid delivery create check, succeeds":   testInvalidDeliveryCreate,
 		"duplicate delivery create check, succeeds": testDuplicateDeliveryCreate,
+		"test schedule CRUD, succeeds":              testScheduleCRUD,
 	} {
 		t.Run(scenario, func(t *testing.T) {
-			dc, teardown := setup(t, logger)
+			dc, teardown := setup(t, testLogger)
 			defer teardown()
-			fn(t, dc)
+			fn(t, dc, testLogger)
 		})
 	}
 }
 
-func setup(t *testing.T, logger logger.AppLogger) (
+func setup(t *testing.T, testLogger logger.AppLogger) (
 	dc delclient.Client,
 	teardown func(),
 ) {
 	t.Helper()
 
 	clientOpts := delclient.NewDefaultClientOption()
-	clientOpts.Caller = "delivery-client-test"
+	clientOpts.Caller = "TestDeliveriesClient"
 
-	dc, err := delclient.NewClient(logger, clientOpts)
+	dc, err := delclient.NewClient(testLogger, clientOpts)
 	require.NoError(t, err)
 
 	return dc, func() {
@@ -58,7 +64,7 @@ func setup(t *testing.T, logger logger.AppLogger) (
 	}
 }
 
-func testDatabaseSetup(t *testing.T, dc delclient.Client) {
+func testDatabaseSetup(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -77,22 +83,31 @@ func testDatabaseSetup(t *testing.T, dc delclient.Client) {
 	require.Equal(t, len(ssResp.Statuses), 4)
 }
 
-func testOrderCRUD(t *testing.T, dc delclient.Client) {
+func testOrderCRUD(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
 	t.Helper()
+
+	gOpts := geoclient.NewDefaultClientOption()
+	gOpts.Caller = "TestDeliveriesClient"
+	geoClient, err := geoclient.NewClient(testLogger, gOpts)
+	require.NoError(t, err)
+
+	reqstr := "test-client-create-order@gmail.com"
+	startAddr := createStartAddressTester(t, geoClient, reqstr)
+	destAddr := createDestAddressTester(t, geoClient, reqstr)
 
 	now := time.Now()
 	start := now.Add(48 * time.Hour).Unix()
 	end := now.Add(53 * time.Hour).Unix()
 
-	reqtr, shopId, txnId := "test-client-create-order@gmail.com", "test-client-order-create", "Cr341e0r62"
+	shopId, txnId := "test-client-order-create", "Cr341e0r62"
 	or := createOrderTester(t, dc, &api.CreateOrderRequest{
 		ShopId:        shopId,
-		RequestedBy:   reqtr,
+		RequestedBy:   reqstr,
 		TransactionId: txnId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -111,7 +126,7 @@ func testOrderCRUD(t *testing.T, dc delclient.Client) {
 		Id:          or.Order.Id,
 		DeliveryId:  deliveryId,
 		Status:      api.OrderStatus_READY_FOR_PICKUP,
-		RequestedBy: reqtr,
+		RequestedBy: reqstr,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, resp.Order.DeliveryId, deliveryId, "order delivery id should match input delivery id")
@@ -120,24 +135,36 @@ func testOrderCRUD(t *testing.T, dc delclient.Client) {
 	deleteOrderTester(t, dc, &api.DeleteOrderRequest{
 		Id: or.Order.Id,
 	})
+
+	deleteAddressTester(t, geoClient, startAddr.Id, startAddr.RefId)
+	deleteAddressTester(t, geoClient, destAddr.Id, destAddr.RefId)
 }
 
-func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
+func testDeliveryCRUD(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
 	t.Helper()
+
+	reqstr := "test-client-create-delivery@gmail.com"
+	gOpts := geoclient.NewDefaultClientOption()
+	gOpts.Caller = "TestDeliveriesClient"
+	geoClient, err := geoclient.NewClient(testLogger, gOpts)
+	require.NoError(t, err)
+
+	startAddr := createStartAddressTester(t, geoClient, reqstr)
+	destAddr := createDestAddressTester(t, geoClient, reqstr)
 
 	now := time.Now()
 	start := now.Add(48 * time.Hour).Unix()
 	end := now.Add(53 * time.Hour).Unix()
 
-	reqtr, shopId, txnId := "test-client-create-delivery@gmail.com", "test-client-delivery-create", "Cr341D3lv2y"
+	shopId, txnId := "test-client-delivery-create", "Cr341D3lv2y"
 	or := createOrderTester(t, dc, &api.CreateOrderRequest{
 		ShopId:        shopId,
-		RequestedBy:   reqtr,
+		RequestedBy:   reqstr,
 		TransactionId: txnId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -153,17 +180,17 @@ func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 
 	del := createDeliveryTester(t, dc, &api.CreateDeliveryRequest{
 		OrderId:       or.Order.Id,
-		RequestedBy:   reqtr,
-		SourceId:      shopId,
-		OfferMin:      comffC.F12,
-		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
-		PkgHeight:     comffC.F10,
-		PkgWidth:      comffC.F20,
-		PkgDepth:      comffC.F12,
-		StartTime:     start,
-		EndTime:       end,
+		RequestedBy:   reqstr,
+		SourceId:      or.Order.ShopId,
+		OfferMin:      or.Order.Offer.Range.Min,
+		OfferMax:      or.Order.Offer.Range.Max,
+		StartId:       or.Order.Source.AddressId,
+		DestinationId: or.Order.Destination.AddressId,
+		PkgHeight:     or.Order.DeliveryDetails.Height,
+		PkgWidth:      or.Order.DeliveryDetails.Width,
+		PkgDepth:      or.Order.DeliveryDetails.Depth,
+		StartTime:     or.Order.DeliveryTimeRange.Start,
+		EndTime:       or.Order.DeliveryTimeRange.End,
 	})
 	del = getDeliveryTester(t, dc, &api.GetDeliveryRequest{
 		Id: del.Delivery.Id,
@@ -173,7 +200,7 @@ func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 		Id:          or.Order.Id,
 		DeliveryId:  del.Delivery.Id,
 		Status:      api.OrderStatus_READY_FOR_PICKUP,
-		RequestedBy: reqtr,
+		RequestedBy: reqstr,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, resp.Order.DeliveryId, del.Delivery.Id, "order delivery id should match input delivery id")
@@ -184,7 +211,7 @@ func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 		Id:          del.Delivery.Id,
 		CourierId:   courierId,
 		Status:      api.DeliveryStatus_CONFIGURED,
-		RequestedBy: reqtr,
+		RequestedBy: reqstr,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, delResp.Delivery.CourierId, courierId, "delivery courier id should match input courier id")
@@ -197,24 +224,36 @@ func testDeliveryCRUD(t *testing.T, dc delclient.Client) {
 	deleteDeliveryTester(t, dc, &api.DeleteDeliveryRequest{
 		Id: delResp.Delivery.Id,
 	})
+
+	deleteAddressTester(t, geoClient, startAddr.Id, startAddr.RefId)
+	deleteAddressTester(t, geoClient, destAddr.Id, destAddr.RefId)
 }
 
-func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client) {
+func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
 	t.Helper()
+
+	reqstr := "test-client-dup-delivery@gmail.com"
+	gOpts := geoclient.NewDefaultClientOption()
+	gOpts.Caller = "TestDeliveriesClient"
+	geoClient, err := geoclient.NewClient(testLogger, gOpts)
+	require.NoError(t, err)
+
+	startAddr := createStartAddressTester(t, geoClient, reqstr)
+	destAddr := createDestAddressTester(t, geoClient, reqstr)
 
 	now := time.Now()
 	start := now.Add(48 * time.Hour).Unix()
 	end := now.Add(53 * time.Hour).Unix()
 
-	reqtr, shopId, txnId := "test-client-create-delivery@gmail.com", "test-client-delivery-create", "Cr341D3lv2y"
+	shopId, txnId := "test-client-dup-delivery", "Cr341D3lv2y"
 	or := createOrderTester(t, dc, &api.CreateOrderRequest{
 		ShopId:        shopId,
-		RequestedBy:   reqtr,
+		RequestedBy:   reqstr,
 		TransactionId: txnId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -227,12 +266,12 @@ func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client) {
 
 	cdr := &api.CreateDeliveryRequest{
 		OrderId:       or.Order.Id,
-		RequestedBy:   reqtr,
+		RequestedBy:   reqstr,
 		SourceId:      shopId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -248,7 +287,7 @@ func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := dc.CreateDelivery(ctx, cdr)
+	_, err = dc.CreateDelivery(ctx, cdr)
 	require.Error(t, err)
 	e, ok := status.FromError(err)
 	require.Equal(t, ok, true)
@@ -261,24 +300,36 @@ func testDuplicateDeliveryCreate(t *testing.T, dc delclient.Client) {
 	deleteDeliveryTester(t, dc, &api.DeleteDeliveryRequest{
 		Id: delResp.Delivery.Id,
 	})
+
+	deleteAddressTester(t, geoClient, startAddr.Id, startAddr.RefId)
+	deleteAddressTester(t, geoClient, destAddr.Id, destAddr.RefId)
 }
 
-func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client) {
+func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
 	t.Helper()
+
+	gOpts := geoclient.NewDefaultClientOption()
+	gOpts.Caller = "TestDeliveriesClient"
+	geoClient, err := geoclient.NewClient(testLogger, gOpts)
+	require.NoError(t, err)
+
+	reqstr := "test-client-invalid-delivery@gmail.com"
+	startAddr := createStartAddressTester(t, geoClient, reqstr)
+	destAddr := createDestAddressTester(t, geoClient, reqstr)
 
 	now := time.Now()
 	start := now.Add(48 * time.Hour).Unix()
 	end := now.Add(53 * time.Hour).Unix()
 
-	reqtr, shopId, txnId := "test-client-create-delivery@gmail.com", "test-client-delivery-create", "Cr341D3lv2y"
+	shopId, txnId := "test-client-invalid-delivery", "Cr341D3lv2y"
 	or := createOrderTester(t, dc, &api.CreateOrderRequest{
 		ShopId:        shopId,
-		RequestedBy:   reqtr,
+		RequestedBy:   reqstr,
 		TransactionId: txnId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -295,8 +346,8 @@ func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client) {
 		SourceId:      shopId,
 		OfferMin:      comffC.F12,
 		OfferMax:      comffC.F15,
-		StartId:       "s742t",
-		DestinationId: "63s1",
+		StartId:       startAddr.Id,
+		DestinationId: destAddr.Id,
 		PkgHeight:     comffC.F10,
 		PkgWidth:      comffC.F20,
 		PkgDepth:      comffC.F12,
@@ -307,7 +358,7 @@ func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := dc.CreateDelivery(ctx, cdr)
+	_, err = dc.CreateDelivery(ctx, cdr)
 	require.Error(t, err)
 	e, ok := status.FromError(err)
 	require.Equal(t, ok, true)
@@ -316,6 +367,104 @@ func testInvalidDeliveryCreate(t *testing.T, dc delclient.Client) {
 	deleteOrderTester(t, dc, &api.DeleteOrderRequest{
 		Id: or.Order.Id,
 	})
+
+	deleteAddressTester(t, geoClient, startAddr.Id, startAddr.RefId)
+	deleteAddressTester(t, geoClient, destAddr.Id, destAddr.RefId)
+}
+
+func testScheduleCRUD(t *testing.T, dc delclient.Client, testLogger logger.AppLogger) {
+	t.Helper()
+
+	reqstr := "test-client-create-schedule@comfforts.com"
+	courierId, initialOfferId := "test-client-schedule-create", "Cr341S63d2l"
+
+	now := time.Now()
+	sch := createScheduleTester(t, dc, &api.CreateScheduleRequest{
+		CourierId:     courierId,
+		OfferId:       initialOfferId,
+		DayIdentifier: now.Unix(),
+		RequestedBy:   reqstr,
+	}, now)
+
+	sch = getScheduleTester(t, dc, &api.GetScheduleRequest{
+		Id: sch.Id,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	upResp, err := dc.UpdateSchedule(ctx, &api.UpdateScheduleRequest{
+		Id:          sch.Id,
+		Status:      api.ScheduleStatus_SCHEDULED,
+		RequestedBy: reqstr,
+	})
+	require.NoError(t, err)
+	require.Equal(t, api.ScheduleStatus_SCHEDULED, upResp.Schedule.Status)
+
+	searchTime := now.Add(45 * time.Minute)
+	resp, err := dc.SearchSchedules(ctx, &api.GetSchedulesRequest{
+		CourierId:     courierId,
+		DayIdentifier: searchTime.Unix(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, true, len(resp.Schedules) > 0)
+	require.Equal(t, upResp.Schedule.Id, resp.Schedules[0].Id)
+
+	deleteScheduleTester(t, dc, &api.DeleteScheduleRequest{
+		Id: sch.Id,
+	})
+}
+
+func createStartAddressTester(t *testing.T, gCl geoclient.Client, rqstr string) *geoapi.Address {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := gCl.AddAddress(ctx, &geoapi.AddressRequest{
+		Type:        geoapi.AddressType_GEO,
+		Street:      "5101 S Pecos Rd",
+		City:        "Las Vegas",
+		State:       "NV",
+		PostalCode:  "89120",
+		Country:     comffC.US,
+		RequestedBy: rqstr,
+	})
+	require.NoError(t, err)
+	return resp.Address
+}
+
+func createDestAddressTester(t *testing.T, gCl geoclient.Client, rqstr string) *geoapi.Address {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := gCl.AddAddress(ctx, &geoapi.AddressRequest{
+		Type:        geoapi.AddressType_GEO,
+		Street:      "4001 S Maryland Pkwy",
+		City:        "Las Vegas",
+		State:       "NV",
+		PostalCode:  "89119",
+		Country:     comffC.US,
+		RequestedBy: rqstr,
+	})
+	require.NoError(t, err)
+	return resp.Address
+}
+
+func deleteAddressTester(t *testing.T, gCl geoclient.Client, id, refId string) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := gCl.DeleteAddress(ctx, &geoapi.DeleteAddressRequest{
+		Id:    id,
+		RefId: refId,
+	})
+	require.NoError(t, err)
+	require.Equal(t, true, resp.Ok)
 }
 
 func createOrderTester(t *testing.T, client delclient.Client, cor *api.CreateOrderRequest) *api.OrderResponse {
@@ -405,6 +554,43 @@ func deleteDeliveryTester(t *testing.T, client delclient.Client, dd *api.DeleteD
 	defer cancel()
 
 	resp, err := client.DeleteDelivery(ctx, dd)
+	require.NoError(t, err)
+	require.Equal(t, true, resp.Ok)
+}
+
+func createScheduleTester(t *testing.T, client delclient.Client, req *api.CreateScheduleRequest, timeVal time.Time) *api.DeliverySchedule {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	resp, err := client.CreateSchedule(ctx, req)
+	require.NoError(t, err)
+
+	assert.Equal(t, req.CourierId, resp.Schedule.CourierId, "schedule courier id should match input courier id")
+	assert.Equal(t, req.OfferId, resp.Schedule.InitialOfferId, "schedule initial offer id should match input offer id")
+	assert.Equal(t, api.ScheduleStatus_CREATED, resp.Schedule.Status, "schedule status should be CREATED")
+
+	year, month, day := timeVal.Date()
+	dayStr := fmt.Sprintf("%d/%s/%d", year, month, day)
+	assert.Equal(t, dayStr, resp.Schedule.DayIdentifier, "schedule day identifier should be valid for input timestamp ")
+	return resp.Schedule
+}
+
+func getScheduleTester(t *testing.T, client delclient.Client, req *api.GetScheduleRequest) *api.DeliverySchedule {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := client.GetSchedule(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, resp.Schedule.Id, req.Id)
+	return resp.Schedule
+}
+
+func deleteScheduleTester(t *testing.T, client delclient.Client, req *api.DeleteScheduleRequest) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resp, err := client.DeleteSchedule(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, true, resp.Ok)
 }
