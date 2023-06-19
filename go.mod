@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/comfforts/comff-config v0.0.17
 	github.com/comfforts/comff-constants v0.0.11
-	github.com/comfforts/comff-delivery v0.0.28
+	github.com/comfforts/comff-delivery v0.0.29
 	github.com/comfforts/comff-geo v0.2.26
 	github.com/comfforts/comff-geo-client v0.0.32
 	github.com/comfforts/logger v0.1.13
