@@ -62,6 +62,8 @@ type Client interface {
 	GetSchedule(ctx context.Context, req *api.GetScheduleRequest, opts ...grpc.CallOption) (*api.ScheduleResponse, error)
 	SearchSchedules(ctx context.Context, req *api.GetSchedulesRequest, opts ...grpc.CallOption) (*api.SchedulesResponse, error)
 	DeleteSchedule(ctx context.Context, req *api.DeleteScheduleRequest, opts ...grpc.CallOption) (*api.DeleteResponse, error)
+	GetRoute(ctx context.Context, req *api.RouteRequest, opts ...grpc.CallOption) (*api.RouteResponse, error)
+	GetPendingRoute(ctx context.Context, req *api.PendingRouteRequest, opts ...grpc.CallOption) (*api.RouteResponse, error)
 	Close() error
 }
 
@@ -336,6 +338,20 @@ func (dc *deliveriesClient) DeleteDelivery(
 	defer cancel()
 
 	return dc.client.DeleteDelivery(ctx, req)
+}
+
+func (dc *deliveriesClient) GetRoute(ctx context.Context, req *api.RouteRequest, opts ...grpc.CallOption) (*api.RouteResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.GetRoute(ctx, req)
+}
+
+func (dc *deliveriesClient) GetPendingRoute(ctx context.Context, req *api.PendingRouteRequest, opts ...grpc.CallOption) (*api.RouteResponse, error) {
+	ctx, cancel := dc.contextWithOptions(ctx, dc.opts)
+	defer cancel()
+
+	return dc.client.GetPendingRoute(ctx, req)
 }
 
 func (dc *deliveriesClient) Close() error {
